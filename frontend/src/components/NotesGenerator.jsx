@@ -11,7 +11,7 @@ const NotesGenerator = () => {
 
         setIsLoading(true);
         try {
-            const response = await fetch('http://localhost:5000/api/notes/generate', {
+            const response = await fetch('https://backendtech-cg4g.onrender.com/api/notes/generate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
