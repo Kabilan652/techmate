@@ -21,7 +21,7 @@ const RoadmapPage = () => {
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:5000/api/ai/roadmap", {
+      const response = await fetch("https://backendtech-cg4g.onrender.com/api/ai/roadmap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: topic.trim() })
