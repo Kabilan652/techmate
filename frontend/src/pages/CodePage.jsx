@@ -51,7 +51,7 @@ const CodePage = () => {
 
         try {
             //  FIX: React fetches from your backend, it doesn't define app.post!
-            const response = await fetch("http://localhost:5000/api/code/execute", {
+            const response = await fetch("https://backendtech-cg4g.onrender.com/api/code/execute", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -96,7 +96,7 @@ const CodePage = () => {
         const prompt = `Please briefly explain this ${LANGUAGES[selectedLang].name} code. Keep it under 3 paragraphs and explain what it does step-by-step:\n\n\`\`\`${selectedLang}\n${code}\n\`\`\``;
 
         try {
-            const response = await fetch("http://localhost:5000/api/ai/chat", {
+            const response = await fetch("https://backendtech-cg4g.onrender.com/api/ai/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
