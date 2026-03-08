@@ -20,7 +20,7 @@ const NotesGenerator = () => {
         setGeneratedNotes('');
 
         try {
-            const response = await fetch("http://localhost:5000/api/ai/notes", {
+            const response = await fetch("https://backendtech-cg4g.onrender.com/api/ai/notes", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: inputText })
