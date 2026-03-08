@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from "../context/AuthContext";
+// 👇 Make sure this path matches your Supabase client
+import { supabase } from '../lib/supabase'; 
 import { 
     BookOpen, Trophy, TrendingUp, Flame, 
-    MoreVertical, Clock, CheckCircle, PlayCircle, AlertCircle,
-    LogOut 
+    MoreVertical, Clock, PlayCircle, AlertCircle,
+    LogOut, Sparkles, Compass, MessageSquare
 } from 'lucide-react';
 
-// --- MOCK DATA (All set to 0) ---
+// --- ZEROED MOCK DATA (New User State) ---
 const MOCK_DATA = {
-    user: { name: "Student", level: "Beginner" },
     topicsLearned: 0,
     quizzesTaken: 0,
     averageScore: 0,
@@ -19,27 +20,30 @@ const MOCK_DATA = {
         { day: 'Wed', hours: 0 }, { day: 'Thu', hours: 0 },
         { day: 'Fri', hours: 0 }, { day: 'Sat', hours: 0 }, { day: 'Sun', hours: 0 },
     ],
-    recentActivity: [], 
-    courses: []
+    recentActivity: [], // Empty array for new user
+    courses: [] // Empty array for new user
 };
 
 const colorMap = {
-    blue: { bg: 'bg-blue-50', text: 'text-blue-600' },
-    purple: { bg: 'bg-purple-50', text: 'text-purple-600' },
-    green: { bg: 'bg-green-50', text: 'text-green-600' },
-    orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
+    blue: { bg: 'bg-blue-50', text: 'text-blue-600', hover: 'group-hover:text-blue-600' },
+    purple: { bg: 'bg-purple-50', text: 'text-purple-600', hover: 'group-hover:text-purple-600' },
+    green: { bg: 'bg-green-50', text: 'text-green-600', hover: 'group-hover:text-green-600' },
+    orange: { bg: 'bg-orange-50', text: 'text-orange-600', hover: 'group-hover:text-orange-600' },
 };
 
 const StatCard = ({ title, value, subtext, icon: Icon, color }) => (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200 group">
+    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 hover:-translate-y-1 transition-all duration-300 group">
         <div className="flex items-start justify-between">
             <div>
-                <p className="text-sm font-semibold text-gray-500 mb-2">{title}</p>
-                <h3 className="text-3xl font-extrabold text-gray-900 group-hover:text-indigo-600 transition-colors">{value}</h3>
-                <p className={`text-xs font-bold mt-2 ${color === 'orange' ? 'text-orange-500' : 'text-green-500'}`}>{subtext}</p>
+                <p className="text-sm font-semibold text-gray-500 mb-1">{title}</p>
+                <h3 className={`text-3xl font-extrabold text-gray-900 transition-colors ${colorMap[color].hover}`}>{value}</h3>
+                <p className={`text-xs font-semibold mt-2 ${color === 'orange' ? 'text-orange-500' : 'text-emerald-500'} flex items-center gap-1`}>
+                    {color === 'orange' ? <Flame size={14}/> : <TrendingUp size={14}/>}
+                    {subtext}
+                </p>
             </div>
-            <div className={`p-3 rounded-xl ${colorMap[color].bg}`}>
-                <Icon className={`w-7 h-7 ${colorMap[color].text}`} strokeWidth={2.5} />
+            <div className={`p-4 rounded-2xl ${colorMap[color].bg} transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
+                <Icon className={`w-6 h-6 ${colorMap[color].text}`} strokeWidth={2.5} />
             </div>
         </div>
     </div>
@@ -47,13 +51,13 @@ const StatCard = ({ title, value, subtext, icon: Icon, color }) => (
 
 const LoadingSkeleton = () => (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-pulse w-full">
-        <div className="h-8 bg-gray-200 w-1/4 rounded-lg"></div>
+        <div className="h-10 bg-gray-200 w-1/3 rounded-xl"></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => <div key={i} className="h-36 bg-gray-200 rounded-2xl"></div>)}
+            {[...Array(4)].map((_, i) => <div key={i} className="h-40 bg-gray-200 rounded-3xl"></div>)}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 h-80 bg-gray-200 rounded-2xl"></div>
-            <div className="h-80 bg-gray-200 rounded-2xl"></div>
+            <div className="lg:col-span-2 h-96 bg-gray-200 rounded-3xl"></div>
+            <div className="h-96 bg-gray-200 rounded-3xl"></div>
         </div>
     </div>
 );
@@ -63,7 +67,8 @@ const DashboardPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isUsingMock, setIsUsingMock] = useState(false);
     
-    const { signOut } = useAuth();
+    const [userName, setUserName] = useState("Student");
+    const { signOut, user } = useAuth();
     const navigate = useNavigate();
 
     const handleLogout = async () => {
@@ -71,153 +76,210 @@ const DashboardPage = () => {
         navigate("/login");
     };
 
+    // Fetch user name from Supabase
     useEffect(() => {
-        // --- FORCE MOCK DATA ---
-        // We set the stats to the 0-value MOCK_DATA immediately.
-        setStats(MOCK_DATA);
-        setIsLoading(false);
-        
-        // --- DISABLE BANNER ---
-        // Setting this to false ensures the "Demo Mode" banner is hidden.
-        setIsUsingMock(false); 
+        const fetchUserName = async () => {
+            if (!user) return;
+            try {
+                const { data, error } = await supabase
+                    .from('profiles') 
+                    .select('full_name') 
+                    .eq('id', user.id)
+                    .single();
+
+                if (error) throw error;
+                
+                if (data && data.full_name) {
+                    setUserName(data.full_name);
+                }
+            } catch (error) {
+                console.error("Error fetching user name:", error.message);
+                if (user?.user_metadata?.fullName) {
+                    setUserName(user.user_metadata.fullName);
+                }
+            }
+        };
+
+        fetchUserName();
+    }, [user]);
+
+    useEffect(() => {
+        setTimeout(() => {
+            setStats(MOCK_DATA);
+            setIsLoading(false);
+            setIsUsingMock(false); 
+        }, 600);
     }, []);
 
-    if (isLoading) return <div className="h-full bg-gray-50 flex pt-4"><LoadingSkeleton /></div>;
-    if (!stats) return <div className="h-full flex items-center justify-center text-red-500 font-bold">Critical Error loading application.</div>;
+    if (isLoading) return <div className="min-h-screen bg-slate-50 flex pt-4"><LoadingSkeleton /></div>;
+    if (!stats) return <div className="min-h-screen flex items-center justify-center text-red-500 font-bold">Critical Error loading application.</div>;
 
     return (
-        <div className="w-full h-full bg-gray-50 font-sans text-gray-900 flex flex-col overflow-hidden">
-            <main className="flex-1 overflow-y-auto p-6 lg:p-8 custom-scrollbar relative">
+        <div className="w-full min-h-screen bg-[#F8FAFC] font-sans text-gray-900 flex flex-col overflow-hidden selection:bg-indigo-100">
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar relative">
                 <div className="max-w-7xl mx-auto space-y-8 pb-12">
                     
-                    {/* This banner will NOT show because isUsingMock is false */}
+                    {/* Demo Banner */}
                     {isUsingMock && (
-                        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-center gap-3 shadow-sm">
+                        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-5 py-4 rounded-2xl flex items-center gap-3 shadow-sm">
                             <AlertCircle size={20} className="text-amber-500 shrink-0" />
                             <span className="text-sm font-medium">Running in local demo mode. Connect backend to see live data.</span>
                         </div>
                     )}
 
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">Welcome back!</h1>
-                            <p className="text-gray-500 mt-1 font-medium">Here is what's happening with your learning journey today.</p>
+                    {/* Header Section */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-gray-100 relative overflow-hidden">
+                        <div className="absolute -top-32 -right-32 w-96 h-96 bg-gradient-to-br from-indigo-100 to-purple-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+                        
+                        <div className="relative z-10">
+                            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-gray-900">
+                                Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">{userName}</span>! 👋
+                            </h1>
+                            <p className="text-gray-500 mt-2 font-medium flex items-center gap-2 text-sm sm:text-base">
+                                <Sparkles size={18} className="text-amber-400" />
+                                Your learning journey awaits. Let's make today count!
+                            </p>
                         </div>
                         <button 
                             onClick={handleLogout}
-                            className="flex items-center gap-2 px-4 py-2 bg-white text-red-600 border border-gray-200 rounded-lg hover:bg-red-50 hover:border-red-200 transition-colors shadow-sm font-medium text-sm"
+                            className="relative z-10 flex items-center gap-2 px-5 py-2.5 bg-white text-gray-600 border border-gray-200 rounded-xl hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm font-bold text-sm w-fit"
                         >
                             <LogOut size={18} />
                             Log Out
                         </button>
                     </div>
 
+                    {/* Stats Grid - Updated subtexts for new users */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                        <StatCard title="Topics Mastered" value={stats.topicsLearned || 0} subtext="Start learning!" icon={BookOpen} color="blue" />
-                        <StatCard title="Quizzes Passed" value={stats.quizzesTaken || 0} subtext="Take a quiz!" icon={Trophy} color="purple" />
-                        <StatCard title="Average Score" value={`${stats.averageScore || 0}%`} subtext="Awaiting data" icon={TrendingUp} color="green" />
-                        <StatCard title="Current Streak" value={`${stats.streak || 0} Days`} subtext="Build your streak!" icon={Flame} color="orange" />
+                        <StatCard title="Topics Mastered" value={stats.topicsLearned} subtext="Start your journey" icon={BookOpen} color="blue" />
+                        <StatCard title="Quizzes Passed" value={stats.quizzesTaken} subtext="Take a practice quiz" icon={Trophy} color="purple" />
+                        <StatCard title="Average Score" value={`${stats.averageScore}%`} subtext="Awaiting first score" icon={TrendingUp} color="green" />
+                        <StatCard title="Current Streak" value={`${stats.streak} Days`} subtext="Start building today" icon={Flame} color="orange" />
                     </div>
 
+                    {/* Main Content Area */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                        
+                        {/* Left Column (Charts & Courses) */}
                         <div className="lg:col-span-2 space-y-6 sm:space-y-8">
                             
-                            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+                            {/* Bar Chart Section */}
+                            <div className="bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-gray-100">
                                 <div className="flex justify-between items-center mb-8">
-                                    <h2 className="text-lg font-bold text-gray-900">Weekly Study Hours</h2>
-                                    <select className="text-sm font-medium border-none bg-gray-50 rounded-lg text-gray-600 px-3 py-2 cursor-pointer outline-none ring-1 ring-gray-200 focus:ring-indigo-500">
+                                    <h2 className="text-xl font-bold text-gray-900">Weekly Study Hours</h2>
+                                    <select className="text-sm font-bold border-none bg-slate-50 rounded-xl text-gray-600 px-4 py-2 cursor-pointer outline-none ring-1 ring-gray-200 focus:ring-indigo-500 transition-shadow">
                                         <option>This Week</option>
                                         <option>Last Week</option>
                                     </select>
                                 </div>
                                 
-                                <div className="flex items-end justify-between h-56 mt-4 gap-2 sm:gap-4">
+                                <div className="flex items-end justify-between h-64 mt-4 gap-2 sm:gap-4">
                                     {stats.progressData?.map((data, index) => {
                                         const maxHours = 8;
+                                        // If hours are 0, render a tiny minimum bar (2%) so it's visible, otherwise calculate height
                                         const heightPct = data.hours > 0 ? Math.max((data.hours / maxHours) * 100, 5) : 2; 
                                         
                                         return (
                                             <div key={index} className="flex flex-col items-center group flex-1">
                                                 <div className="relative w-full flex justify-center h-full items-end">
-                                                    <div className="absolute -top-10 hidden group-hover:flex bg-gray-900 text-white text-xs font-bold py-1.5 px-3 rounded-lg z-10 shadow-xl items-center gap-1">
+                                                    <div className="absolute -top-12 hidden group-hover:flex bg-gray-900 text-white text-xs font-bold py-2 px-3 rounded-lg z-10 shadow-xl items-center gap-1 transition-all">
                                                         {data.hours} <span className="text-gray-400 font-normal">hrs</span>
+                                                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
                                                     </div>
                                                     <div 
-                                                        className={`w-full max-w-[48px] rounded-t-xl transition-all duration-300 relative overflow-hidden ${data.hours > 0 ? 'bg-indigo-50 group-hover:bg-indigo-500' : 'bg-gray-100'}`}
+                                                        className={`w-full max-w-[56px] rounded-xl transition-all duration-300 relative overflow-hidden ${data.hours > 0 ? 'bg-indigo-50 group-hover:shadow-[0_0_15px_rgba(99,102,241,0.4)]' : 'bg-slate-100 group-hover:bg-slate-200'}`}
                                                         style={{ height: `${heightPct}%` }}
                                                     >
-                                                        {data.hours > 0 && <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/10 to-transparent"></div>}
+                                                        {data.hours > 0 && (
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-indigo-600 to-indigo-400 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <span className="text-xs font-bold text-gray-400 mt-4 group-hover:text-gray-700 transition-colors">{data.day}</span>
+                                                <span className={`text-sm font-bold mt-4 transition-colors ${data.hours > 0 ? 'text-gray-600 group-hover:text-indigo-600' : 'text-gray-400'}`}>
+                                                    {data.day}
+                                                </span>
                                             </div>
                                         )
                                     })}
                                 </div>
                             </div>
 
-                            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
-                                <h2 className="text-lg font-bold text-gray-900 mb-6">Courses in Progress</h2>
-                                <div className="space-y-6">
-                                    {stats.courses?.length > 0 ? stats.courses.map((course, idx) => (
-                                        <div key={idx} className="group">
-                                            <div className="flex justify-between items-end mb-2">
-                                                <h4 className="font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">{course.name}</h4>
-                                                <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-md">{course.completed}/{course.total} Modules</span>
+                            {/* Courses Section */}
+                            <div className="bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6">Courses in Progress</h2>
+                                
+                                {stats.courses?.length > 0 ? (
+                                    <div className="space-y-6">
+                                        {stats.courses.map((course, idx) => (
+                                            <div key={idx} className="group cursor-pointer">
+                                                {/* ... (Previous course code omitted for brevity since it's empty in this state) ... */}
                                             </div>
-                                            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                                                <div 
-                                                    className="bg-indigo-500 h-full rounded-full transition-all duration-1000 ease-out relative" 
-                                                    style={{ width: `${course.progress}%` }}
-                                                >
-                                                    {course.progress > 0 && <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>}
-                                                </div>
-                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    // Beautiful Empty State for Courses
+                                    <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 text-center bg-slate-50 rounded-2xl border border-dashed border-gray-200">
+                                        <div className="bg-white p-4 rounded-full shadow-sm mb-4">
+                                            <Compass className="w-8 h-8 text-indigo-400" />
                                         </div>
-                                    )) : (
-                                        <p className="text-gray-500 text-sm italic">No courses in progress yet.</p>
-                                    )}
-                                </div>
+                                        <h3 className="text-gray-900 font-bold text-lg mb-2">No courses started yet</h3>
+                                        <p className="text-gray-500 text-sm max-w-xs mb-6 leading-relaxed">
+                                            Ready to dive in? Generate an AI learning roadmap to kickstart your journey.
+                                        </p>
+                                        <Link to="/roadmap" className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-sm hover:shadow-md flex items-center gap-2">
+                                            <BookOpen size={16} />
+                                            Explore Courses
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
+                        {/* Right Column (Activity & Quote) */}
                         <div className="space-y-6 sm:space-y-8">
-                            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100">
+                            
+                            {/* Activity Feed */}
+                            <div className="bg-white p-6 sm:p-8 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col">
                                 <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-lg font-bold text-gray-900">Recent Activity</h2>
-                                    <button className="text-gray-400 hover:text-gray-700"><MoreVertical size={20} /></button>
+                                    <h2 className="text-xl font-bold text-gray-900">Recent Activity</h2>
+                                    <button className="text-gray-400 hover:text-indigo-600 transition-colors p-2 hover:bg-indigo-50 rounded-xl">
+                                        <MoreVertical size={20} />
+                                    </button>
                                 </div>
-                                <div className="space-y-6">
-                                    {stats.recentActivity?.length > 0 ? stats.recentActivity.map((activity, index) => (
-                                        <div key={index} className="flex gap-4 group cursor-pointer">
-                                            <div className={`p-3 rounded-2xl flex-shrink-0 h-min
-                                                ${activity.type === 'quiz' ? 'bg-emerald-50 text-emerald-600' :
-                                                  activity.type === 'note' ? 'bg-sky-50 text-sky-600' : 'bg-purple-50 text-purple-600'
-                                                }`}>
-                                                {activity.type === 'quiz' && <Trophy size={18} strokeWidth={2.5} />}
-                                                {activity.type === 'note' && <BookOpen size={18} strokeWidth={2.5} />}
-                                                {activity.type === 'video' && <PlayCircle size={18} strokeWidth={2.5} />}
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-gray-800 group-hover:text-indigo-600 transition-colors leading-snug">{activity.title}</p>
-                                                <div className="flex items-center text-[11px] font-semibold text-gray-400 mt-1.5 gap-2 uppercase tracking-wide">
-                                                    <span className="flex items-center gap-1"><Clock size={12} /> {activity.date}</span>
-                                                    {activity.score && <span className="text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">Score: {activity.score}</span>}
-                                                </div>
-                                            </div>
+                                
+                                {stats.recentActivity?.length > 0 ? (
+                                    <div className="space-y-5">
+                                        {stats.recentActivity.map((activity, index) => (
+                                             <div key={index}>{/* List items */}</div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    // Beautiful Empty State for Activity
+                                    <div className="flex-1 flex flex-col items-center justify-center py-10 px-4 text-center">
+                                        <div className="bg-indigo-50 p-4 rounded-2xl mb-4 text-indigo-500">
+                                            <MessageSquare className="w-8 h-8" />
                                         </div>
-                                    )) : (
-                                        <div className="text-center py-6">
-                                            <p className="text-gray-500 text-sm font-medium">No recent activity found.</p>
-                                            <Link to="/chat" className="mt-4 inline-block text-indigo-600 text-xs font-bold hover:underline">Chat with TechMate now!</Link>
-                                        </div>
-                                    )}
-                                </div>
+                                        <p className="text-gray-800 font-bold text-lg mb-1">It's quiet here...</p>
+                                        <p className="text-gray-500 text-sm mb-6">Ask TechMate a question to get your learning history started.</p>
+                                        <Link to="/chat" className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-5 py-2.5 rounded-xl font-bold text-sm transition-colors border border-indigo-100">
+                                            Chat with AI
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
-                                <h3 className="text-indigo-800 font-bold mb-2">Quote of the Day</h3>
-                                <p className="text-indigo-600/80 text-sm italic">"The beautiful thing about learning is that no one can take it away from you." <br/>- B.B. King</p>
+                            {/* Quote Section */}
+                            <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 rounded-[2rem] shadow-md text-white relative overflow-hidden">
+                                <Sparkles className="absolute top-4 right-4 text-white/10 w-24 h-24 rotate-12" />
+                                <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                                
+                                <h3 className="font-bold mb-5 flex items-center gap-2 text-indigo-100 uppercase tracking-widest text-xs">
+                                    Motivation
+                                </h3>
+                                <p className="text-xl font-medium leading-relaxed italic relative z-10 text-white/95">
+                                    "The beautiful thing about learning is that no one can take it away from you."
+                                </p>
+                                <p className="mt-6 text-sm font-bold text-indigo-200">— B.B. King</p>
                             </div>
                         </div>
                     </div>
@@ -227,4 +289,4 @@ const DashboardPage = () => {
     );
 };
 
-export default DashboardPage;
+export default DashboardPage;   

@@ -147,21 +147,58 @@ Return ONLY valid JSON like this:
     }
 });
 app.post("/api/code/execute", async (req, res) => {
-    try {
-        const { language, version, code } = req.body;
+  try {
+    const { language, code } = req.body;
 
-        //  FIX: Updated to the new, official Piston API domain (emkc.org)
-        const response = await axios.post("https://emkc.org/api/v2/piston/execute", {
-            language: language,
-            version: version,
-            files: [{ content: code }]
-        });
+    // Ensure language exists and is mapped correctly
+    const languageMap = {
+      python: 71,
+      javascript: 63,
+      cpp: 54,
+      java: 62
+    };
 
-        res.json(response.data);
-    } catch (error) {
-        console.error("🔥 EXECUTION ERROR:", error.message);
-        res.status(500).json({ message: "Code execution engine failed." });
+    if (!languageMap[language]) {
+        return res.status(400).json({ message: "Unsupported language" });
     }
+
+    const response = await axios.post(
+      "https://ce.judge0.com/submissions/?base64_encoded=false&wait=true",
+      {
+        source_code: code,
+        language_id: languageMap[language]
+      }
+    );
+
+    const data = response.data;
+
+    // Judge0 uses status IDs. ID 3 means "Accepted" (Successful run).
+    // Any other ID (like 6 for Compile Error, 11 for Runtime Error) is a failure.
+    const isError = data.status && data.status.id !== 3;
+
+    // If it's not an error, we prioritize stdout. 
+    // If it is an error, we prioritize stderr or compile_output.
+    const finalOutput = isError 
+        ? (data.stderr || data.compile_output || data.message || "Unknown Error")
+        : (data.stdout || "Program finished with no output.");
+
+    res.json({
+      run: {
+        output: finalOutput,
+        code: isError ? 1 : 0  // 0 = success (green), 1 = error (red)
+      }
+    });
+
+  } catch (error) {
+    console.error("Execution error:", error.message);
+    // Send a structured error back so the frontend can display it in red
+    res.json({
+        run: {
+            output: "Server Error: Could not execute code.",
+            code: 1 
+        }
+    });
+  }
 });
 
 app.post("/api/ai/quiz", async (req, res) => {
@@ -226,6 +263,23 @@ Return ONLY valid JSON like this:
     }
 });
 
+app.get('/api/dashboard/stats', async (req, res) => {
+    await delay(1000);
+    res.json({ user: USER_DATA, ...DASHBOARD_STATS });
+});
+
+// 👇 ADD THIS NEW ROUTE RIGHT HERE 👇
+app.get('/api/courses/progress', async (req, res) => {
+    // Add a small delay to simulate network loading (optional)
+    await delay(800); 
+    
+    // Send back the courses array from your existing mock data
+    res.json({ 
+        success: true,
+        courses: DASHBOARD_STATS.courses 
+    });
+});
+
 // AI CHATBOT ROUTE (100% Hugging Face)
 
 app.post("/api/ai/chat", async (req, res) => {
@@ -267,7 +321,6 @@ app.post("/api/ai/chat", async (req, res) => {
 
 
 // AI SMART NOTES ROUTE (100% Hugging Face)
-
 app.post("/api/ai/notes", async (req, res) => {
   try {
     const { text } = req.body;
@@ -276,12 +329,12 @@ app.post("/api/ai/notes", async (req, res) => {
     const response = await axios.post(
       "https://router.huggingface.co/v1/chat/completions",
       {
-        model: "mistralai/Mistral-7B-Instruct-v0.2",
+        model: "meta-llama/Meta-Llama-3-8B-Instruct",
         messages: [
-          { role: "system", content: "You are an expert tutor who creates structured study notes." },
+          { role: "system", content: "You are an expert tutor who converts text into structured study notes with headings and bullet points." },
           { role: "user", content: text }
         ],
-        max_tokens: 500
+        max_tokens: 700
       },
       {
         headers: {
@@ -298,7 +351,6 @@ app.post("/api/ai/notes", async (req, res) => {
     res.status(500).json({ message: "HuggingFace AI failed" });
   }
 });
-
 
 // START SERVER
 

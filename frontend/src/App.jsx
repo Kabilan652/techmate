@@ -10,6 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import LandingPage from './pages/LandingPage';
+import CourseProgress from './pages/CourseProgress';
 import { useAuth } from "./context/AuthContext";
 
 // Simple protection wrapper
@@ -42,6 +43,14 @@ function App() {
           <Route path="/code" element={<ProtectedRoute><CodePage /></ProtectedRoute>} />
           <Route path="/roadmap" element={<ProtectedRoute><RoadmapPage /></ProtectedRoute>} />
         </Route>
+         <Route
+          path="/course"
+          element={
+            <ProtectedRoute>
+              <CourseProgress />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );
