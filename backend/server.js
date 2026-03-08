@@ -16,10 +16,19 @@ const PORT = process.env.PORT || 5000;
 
 // MIDDLEWARE
 
-app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
+const cors = require("cors");
+
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://techmate-wjf7.onrender.com"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
-}));
+  })
+);
 
 app.use(express.json());
 app.use(morgan('dev'));
