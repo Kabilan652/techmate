@@ -4,12 +4,23 @@ const cors = require("cors");
 const morgan = require("morgan");
 const dotenv = require("dotenv");
 const axios = require("axios");
+const { GoogleGenAI } = require("@google/genai");
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// GEMINI CONFIGURATION
+const ai = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+    })
+  : null;
+
+const GEMINI_MODEL = "gemini-2.5-flash";
+
+// MIDDLEWARE
 app.use(
   cors({
     origin: [
@@ -22,41 +33,82 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
 
-// HUGGING FACE CONFIGURATION
-const HF_API_URL = "https://router.huggingface.co/v1/chat/completions";
-const HF_MODEL = "openai/gpt-oss-120b:fastest";
-
-async function callHuggingFace(messages, maxTokens = 800) {
-  if (!process.env.HF_API_KEY) {
-    throw new Error("HF_API_KEY is missing from environment variables");
+// GEMINI HELPER
+async function callGemini(messages, maxTokens = 800) {
+  if (!ai) {
+    throw new Error("GEMINI_API_KEY is missing from environment variables");
   }
 
-  const response = await axios.post(
-    HF_API_URL,
-    {
-      model: HF_MODEL,
-      messages,
-      max_tokens: maxTokens,
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new Error("A non-empty messages array is required");
+  }
+
+  const systemInstruction = messages
+    .filter((msg) => msg.role === "system")
+    .map((msg) => msg.content)
+    .join("\n");
+
+  const contents = messages
+    .filter((msg) => msg.role !== "system")
+    .map((msg) => {
+      if (!["user", "assistant", "model"].includes(msg.role)) {
+        throw new Error(`Unsupported message role: ${msg.role}`);
+      }
+
+      return {
+        role: msg.role === "assistant" ? "model" : msg.role,
+        parts: [{ text: String(msg.content ?? "") }],
+      };
+    });
+
+  if (contents.length === 0) {
+    throw new Error("At least one user message is required");
+  }
+
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents,
+    config: {
+      maxOutputTokens: maxTokens,
+      ...(systemInstruction ? { systemInstruction } : {}),
     },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.HF_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 120000,
-    }
-  );
+  });
 
-  const reply = response.data?.choices?.[0]?.message?.content;
+  const reply = response.text;
 
-  if (!reply) {
-    throw new Error("Hugging Face returned an empty response");
+  if (!reply || !reply.trim()) {
+    throw new Error("Gemini returned an empty response");
   }
 
-  return reply;
+  return reply.trim();
+}
+
+// ERROR HANDLER FOR GEMINI
+function handleGeminiError(label, error, res, message) {
+  console.error(`${label}:`, error.message);
+
+  if (error.status === 429) {
+    return res.status(429).json({
+      message: "AI usage limit reached. Please try again later.",
+    });
+  }
+
+  if (error.status === 400 || error.status === 404) {
+    return res.status(502).json({
+      message: "The AI request or model configuration is invalid.",
+    });
+  }
+
+  if (error.status === 403 || error.status === 401) {
+    return res.status(502).json({
+      message: "Gemini API authentication or permission failed.",
+    });
+  }
+
+  return res.status(500).json({ message });
 }
 
 // MOCK DATABASE
@@ -128,6 +180,7 @@ app.get("/", (req, res) => {
 // DASHBOARD
 app.get("/api/dashboard/stats", async (req, res) => {
   await delay(500);
+
   res.json({
     user: USER_DATA,
     ...DASHBOARD_STATS,
@@ -159,8 +212,10 @@ app.post("/api/ai/roadmap", async (req, res) => {
   try {
     const { topic } = req.body;
 
-    if (!topic) {
-      return res.status(400).json({ message: "Topic required" });
+    if (!topic || typeof topic !== "string") {
+      return res.status(400).json({
+        message: "A valid topic is required",
+      });
     }
 
     const prompt = `
@@ -177,9 +232,11 @@ Return ONLY a valid JSON array in this format:
     "topics": ["Concept 1", "Concept 2", "Concept 3", "Concept 4"]
   }
 ]
+
+Do not include Markdown code fences.
 `;
 
-    const content = await callHuggingFace(
+    const content = await callGemini(
       [{ role: "user", content: prompt }],
       2000
     );
@@ -198,16 +255,18 @@ Return ONLY a valid JSON array in this format:
 
     const roadmap = JSON.parse(cleanText.substring(start, end + 1));
 
+    if (!Array.isArray(roadmap)) {
+      throw new Error("Roadmap response must be an array");
+    }
+
     return res.json({ roadmap });
   } catch (error) {
-    console.error(
-      "HF ROADMAP ERROR:",
-      error.response?.data || error.message
+    return handleGeminiError(
+      "GEMINI ROADMAP ERROR",
+      error,
+      res,
+      "Roadmap generation failed"
     );
-
-    return res.status(500).json({
-      message: "Roadmap generation failed",
-    });
   }
 });
 
@@ -229,7 +288,7 @@ app.post("/api/code/execute", async (req, res) => {
       });
     }
 
-    if (!code) {
+    if (typeof code !== "string" || !code.trim()) {
       return res.status(400).json({
         message: "Code is required",
       });
@@ -277,8 +336,10 @@ app.post("/api/ai/quiz", async (req, res) => {
   try {
     const { topic } = req.body;
 
-    if (!topic) {
-      return res.status(400).json({ message: "Topic required" });
+    if (!topic || typeof topic !== "string") {
+      return res.status(400).json({
+        message: "A valid topic is required",
+      });
     }
 
     const prompt = `
@@ -296,9 +357,10 @@ Return ONLY a valid JSON array in this format:
 ]
 
 The answer field must be an index from 0 to 3.
+Do not include Markdown code fences.
 `;
 
-    const content = await callHuggingFace(
+    const content = await callGemini(
       [{ role: "user", content: prompt }],
       3500
     );
@@ -317,16 +379,18 @@ The answer field must be an index from 0 to 3.
 
     const quiz = JSON.parse(cleanText.substring(start, end + 1));
 
+    if (!Array.isArray(quiz)) {
+      throw new Error("Quiz response must be an array");
+    }
+
     return res.json({ quiz });
   } catch (error) {
-    console.error(
-      "HF QUIZ ERROR:",
-      error.response?.data || error.message
+    return handleGeminiError(
+      "GEMINI QUIZ ERROR",
+      error,
+      res,
+      "Quiz generation failed"
     );
-
-    return res.status(500).json({
-      message: "Quiz generation failed",
-    });
   }
 });
 
@@ -343,49 +407,54 @@ app.get("/api/courses/progress", async (req, res) => {
 // AI CHAT
 app.post("/api/ai/chat", async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages, message } = req.body;
 
-    if (!Array.isArray(messages) || messages.length === 0) {
+    // Supports both a messages array and a single message string.
+    let conversation;
+
+    if (Array.isArray(messages) && messages.length > 0) {
+      conversation = [
+        {
+          role: "system",
+          content:
+            "You are TechMate, a helpful AI learning assistant. Explain concepts clearly, use bullet points when useful, and provide code examples where relevant. Help users learn programming, computer science, and technology.",
+        },
+        ...messages,
+      ];
+    } else if (typeof message === "string" && message.trim()) {
+      conversation = [
+        {
+          role: "system",
+          content:
+            "You are TechMate, a helpful AI learning assistant. Explain concepts clearly and provide useful programming examples.",
+        },
+        { role: "user", content: message },
+      ];
+    } else {
       return res.status(400).json({
-        message: "A non-empty messages array is required",
+        message: "A message or non-empty messages array is required",
       });
     }
 
-    const conversation = [
-      {
-        role: "system",
-        content:
-          "You are TechMate, a helpful AI learning assistant. Explain concepts clearly, use bullet points when useful, and provide code examples where relevant. Help users learn programming, computer science, and technology.",
-      },
-      ...messages,
-    ];
-
-    const reply = await callHuggingFace(conversation, 1000);
+    const reply = await callGemini(conversation, 1000);
 
     return res.json({ reply });
   } catch (error) {
-    console.error(
-      "HF CHAT ERROR:",
-      error.response?.data || error.message
+    return handleGeminiError(
+      "GEMINI CHAT ERROR",
+      error,
+      res,
+      "Chat API failed"
     );
-
-    return res.status(500).json({
-      message: "Chat API failed",
-      error:
-        error.response?.data?.error?.message ||
-        error.response?.data?.message ||
-        error.message ||
-        "Unknown Hugging Face error",
-    });
   }
 });
 
 // AI SMART NOTES
 app.post("/api/ai/notes", async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, topic } = req.body;
 
-    if (!text) {
+    if (typeof text !== "string" || !text.trim()) {
       return res.status(400).json({
         message: "Text required",
       });
@@ -395,26 +464,26 @@ app.post("/api/ai/notes", async (req, res) => {
       {
         role: "system",
         content:
-          "You are an expert tutor. Convert the provided text into structured study notes with clear headings, key points, and examples.",
+          "You are an expert tutor. Convert the provided text into structured study notes with clear headings, key points, definitions, and examples.",
       },
       {
         role: "user",
-        content: text,
+        content: topic
+          ? `Topic: ${topic}\n\nSource text:\n${text}`
+          : text,
       },
     ];
 
-    const notes = await callHuggingFace(messages, 1000);
+    const notes = await callGemini(messages, 1500);
 
     return res.json({ notes });
   } catch (error) {
-    console.error(
-      "HF NOTES ERROR:",
-      error.response?.data || error.message
+    return handleGeminiError(
+      "GEMINI NOTES ERROR",
+      error,
+      res,
+      "AI notes generation failed"
     );
-
-    return res.status(500).json({
-      message: "AI notes generation failed",
-    });
   }
 });
 
