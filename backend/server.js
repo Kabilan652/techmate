@@ -37,7 +37,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
 
 // GEMINI HELPER
-async function callGemini(messages, maxTokens = 800) {
+async function callGemini(messages, maxTokens = 512) {
   if (!ai) {
     throw new Error("GEMINI_API_KEY is missing from environment variables");
   }
@@ -68,6 +68,8 @@ async function callGemini(messages, maxTokens = 800) {
     throw new Error("At least one user message is required");
   }
 
+  const startTime = Date.now();
+
   const response = await ai.models.generateContent({
     model: GEMINI_MODEL,
     contents,
@@ -76,6 +78,8 @@ async function callGemini(messages, maxTokens = 800) {
       ...(systemInstruction ? { systemInstruction } : {}),
     },
   });
+
+  console.log(`Gemini response time: ${Date.now() - startTime}ms`);
 
   const reply = response.text;
 
@@ -86,7 +90,7 @@ async function callGemini(messages, maxTokens = 800) {
   return reply.trim();
 }
 
-// ERROR HANDLER FOR GEMINI
+// GEMINI ERROR HANDLER
 function handleGeminiError(label, error, res, message) {
   console.error(`${label}:`, error.message);
 
@@ -111,7 +115,7 @@ function handleGeminiError(label, error, res, message) {
   return res.status(500).json({ message });
 }
 
-// MOCK DATABASE
+// MOCK USER DATA
 const USER_DATA = {
   id: 1,
   name: "Alex Johnson",
@@ -178,9 +182,7 @@ app.get("/", (req, res) => {
 });
 
 // DASHBOARD
-app.get("/api/dashboard/stats", async (req, res) => {
-  await delay(500);
-
+app.get("/api/dashboard/stats", (req, res) => {
   res.json({
     user: USER_DATA,
     ...DASHBOARD_STATS,
@@ -188,9 +190,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
 });
 
 // LOGIN
-app.post("/api/auth/login", async (req, res) => {
-  await delay(500);
-
+app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
 
   if (email === "student@demo.com" && password === "password") {
@@ -219,9 +219,9 @@ app.post("/api/ai/roadmap", async (req, res) => {
     }
 
     const prompt = `
-Generate a 5-step learning roadmap to master "${topic}".
+Generate a concise 5-step learning roadmap for "${topic}".
 
-Return ONLY a valid JSON array in this format:
+Return ONLY a valid JSON array:
 [
   {
     "id": 1,
@@ -238,7 +238,7 @@ Do not include Markdown code fences.
 
     const content = await callGemini(
       [{ role: "user", content: prompt }],
-      2000
+      1200
     );
 
     const cleanText = content
@@ -345,24 +345,24 @@ app.post("/api/ai/quiz", async (req, res) => {
     const prompt = `
 Generate 10 multiple-choice quiz questions about "${topic}".
 
-Return ONLY a valid JSON array in this format:
+Return ONLY a valid JSON array:
 [
   {
     "id": 1,
     "question": "Question text",
     "options": ["Option A", "Option B", "Option C", "Option D"],
     "answer": 0,
-    "explanation": "Explanation"
+    "explanation": "Short explanation"
   }
 ]
 
-The answer field must be an index from 0 to 3.
+The answer must be an index from 0 to 3.
 Do not include Markdown code fences.
 `;
 
     const content = await callGemini(
       [{ role: "user", content: prompt }],
-      3500
+      2500
     );
 
     const cleanText = content
@@ -395,10 +395,8 @@ Do not include Markdown code fences.
 });
 
 // COURSE PROGRESS
-app.get("/api/courses/progress", async (req, res) => {
-  await delay(500);
-
-  return res.json({
+app.get("/api/courses/progress", (req, res) => {
+  res.json({
     success: true,
     courses: DASHBOARD_STATS.courses,
   });
@@ -409,7 +407,6 @@ app.post("/api/ai/chat", async (req, res) => {
   try {
     const { messages, message } = req.body;
 
-    // Supports both a messages array and a single message string.
     let conversation;
 
     if (Array.isArray(messages) && messages.length > 0) {
@@ -417,7 +414,7 @@ app.post("/api/ai/chat", async (req, res) => {
         {
           role: "system",
           content:
-            "You are TechMate, a helpful AI learning assistant. Explain concepts clearly, use bullet points when useful, and provide code examples where relevant. Help users learn programming, computer science, and technology.",
+            "You are TechMate, a fast and helpful programming assistant. Answer directly in 3-5 sentences. Use short examples when useful.",
         },
         ...messages,
       ];
@@ -426,9 +423,12 @@ app.post("/api/ai/chat", async (req, res) => {
         {
           role: "system",
           content:
-            "You are TechMate, a helpful AI learning assistant. Explain concepts clearly and provide useful programming examples.",
+            "You are TechMate, a fast and helpful programming assistant. Answer directly in 3-5 sentences. Use short examples when useful.",
         },
-        { role: "user", content: message },
+        {
+          role: "user",
+          content: message.trim(),
+        },
       ];
     } else {
       return res.status(400).json({
@@ -436,7 +436,22 @@ app.post("/api/ai/chat", async (req, res) => {
       });
     }
 
-    const reply = await callGemini(conversation, 1000);
+    // Keep only the latest 6 conversation messages.
+    const systemMessage = conversation.find(
+      (item) => item.role === "system"
+    );
+
+    const recentMessages = conversation
+      .filter((item) => item.role !== "system")
+      .slice(-6);
+
+    const optimizedConversation = [
+      ...(systemMessage ? [systemMessage] : []),
+      ...recentMessages,
+    ];
+
+    // Shorter output usually reduces generation time.
+    const reply = await callGemini(optimizedConversation, 512);
 
     return res.json({ reply });
   } catch (error) {
@@ -464,7 +479,7 @@ app.post("/api/ai/notes", async (req, res) => {
       {
         role: "system",
         content:
-          "You are an expert tutor. Convert the provided text into structured study notes with clear headings, key points, definitions, and examples.",
+          "You are an expert tutor. Create concise study notes with headings, key points, definitions, and short examples.",
       },
       {
         role: "user",
@@ -474,7 +489,7 @@ app.post("/api/ai/notes", async (req, res) => {
       },
     ];
 
-    const notes = await callGemini(messages, 1500);
+    const notes = await callGemini(messages, 1000);
 
     return res.json({ notes });
   } catch (error) {
