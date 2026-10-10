@@ -1,22 +1,37 @@
+const { GoogleGenAI } = require("@google/genai");
+
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+});
+
 const chatController = {
     chat: async (req, res) => {
-        const { message } = req.body;
+        try {
+            const { message } = req.body;
 
-        // Placeholder for AI logic
-        // In a real application, you would call an AI API here (e.g., OpenAI, Gemini)
+            if (!message || typeof message !== "string") {
+                return res.status(400).json({
+                    error: "Please provide a valid message.",
+                });
+            }
 
-        let aiResponse = "I'm a simulated AI. I received your message: " + message;
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: message,
+            });
 
-        if (message.toLowerCase().includes("explain")) {
-            aiResponse = "Sure, I can explain that. [Explanation placeholder]";
-        } else if (message.toLowerCase().includes("hello")) {
-            aiResponse = "Hello! How can I help you learn today?";
+            res.json({
+                reply: response.text,
+            });
+
+        } catch (error) {
+            console.error("GEMINI CHAT ERROR:", error.message);
+
+            res.status(500).json({
+                error: "Failed to generate an AI response.",
+            });
         }
-
-        setTimeout(() => {
-            res.json({ reply: aiResponse });
-        }, 1000); // Simulate network delay
-    }
+    },
 };
 
 module.exports = chatController;
