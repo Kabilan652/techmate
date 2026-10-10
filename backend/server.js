@@ -654,6 +654,7 @@ app.post("/api/ai/notes", async (req, res) => {
 
 const responsesRouter = require('./routes/responses');
 app.use('/api/responses', responsesRouter);
+app.use("/api/dataset", datasetRoutes);
 // ============================================
 // START SERVER
 // ============================================
