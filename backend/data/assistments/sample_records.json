@@ -1,0 +1,74 @@
+[
+  {
+    "studentId": "s001",
+    "skillId": "javascript",
+    "exerciseId": "j1",
+    "correct": 1,
+    "responseTimeMs": 1200,
+    "timestamp": "2026-01-01T09:00:00Z",
+    "attempt": 1
+  },
+  {
+    "studentId": "s001",
+    "skillId": "javascript",
+    "exerciseId": "j2",
+    "correct": 0,
+    "responseTimeMs": 1700,
+    "timestamp": "2026-01-01T09:05:00Z",
+    "attempt": 2
+  },
+  {
+    "studentId": "s001",
+    "skillId": "javascript",
+    "exerciseId": "j3",
+    "correct": 1,
+    "responseTimeMs": 1500,
+    "timestamp": "2026-01-01T09:10:00Z",
+    "attempt": 3
+  },
+  {
+    "studentId": "s002",
+    "skillId": "react",
+    "exerciseId": "r1",
+    "correct": 1,
+    "responseTimeMs": 1300,
+    "timestamp": "2026-01-02T10:00:00Z",
+    "attempt": 1
+  },
+  {
+    "studentId": "s002",
+    "skillId": "react",
+    "exerciseId": "r2",
+    "correct": 0,
+    "responseTimeMs": 2000,
+    "timestamp": "2026-01-02T10:07:00Z",
+    "attempt": 2
+  },
+  {
+    "studentId": "s003",
+    "skillId": "html",
+    "exerciseId": "h1",
+    "correct": 1,
+    "responseTimeMs": 1800,
+    "timestamp": "2026-01-03T11:00:00Z",
+    "attempt": 1
+  },
+  {
+    "studentId": "s003",
+    "skillId": "html",
+    "exerciseId": "h2",
+    "correct": 1,
+    "responseTimeMs": 1450,
+    "timestamp": "2026-01-03T11:08:00Z",
+    "attempt": 2
+  },
+  {
+    "studentId": "s003",
+    "skillId": "html",
+    "exerciseId": "h3",
+    "correct": 0,
+    "responseTimeMs": 2400,
+    "timestamp": "2026-01-03T11:15:00Z",
+    "attempt": 3
+  }
+]
