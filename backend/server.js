@@ -26,8 +26,7 @@ const ai = process.env.GEMINI_API_KEY
   : null;
 
 // Keep this model only if it is available to your API key.
-const GEMINI_MODEL = "gemini-3.8-flash";
-
+const GEMINI_MODEL = "gemini-2.5-flash";
 // Maximum time to wait for Gemini.
 const GEMINI_TIMEOUT = 20000;
 
