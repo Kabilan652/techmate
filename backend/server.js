@@ -647,7 +647,12 @@ app.post("/api/ai/notes", async (req, res) => {
     );
   }
 });
+// ============================================
+// STUDENT RESPONSE TRACKING (PS-21)
+// ============================================
 
+const responsesRouter = require('./routes/responses');
+app.use('/api/responses', responsesRouter);
 // ============================================
 // START SERVER
 // ============================================
