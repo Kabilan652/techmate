@@ -8,6 +8,7 @@ const morgan = require("morgan");
 const dotenv = require("dotenv");
 const axios = require("axios");
 const { GoogleGenAI } = require("@google/genai");
+const datasetRoutes = require("./routes/datasetRoutes");
 
 dotenv.config();
 
