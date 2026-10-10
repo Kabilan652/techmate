@@ -124,17 +124,25 @@ async function callGemini(messages, maxTokens = 256) {
       timeoutPromise,
     ]);
 
-    const reply = response.text;
-
-    console.log(
-      `Gemini response received in ${Date.now() - startTime}ms`
-    );
-
-    if (!reply || !reply.trim()) {
-      throw new Error("Gemini returned an empty response.");
+    const reply =
+      typeof response.text === "string"
+        ? response.text.trim()
+        : "";
+    
+    if (reply) {
+      return reply;
     }
-
-    return reply.trim();
+    
+    // Log response metadata without exposing credentials.
+    console.error("Gemini returned no text.", {
+      model: GEMINI_MODEL,
+      finishReason: response.candidates?.[0]?.finishReason,
+      promptFeedback: response.promptFeedback,
+    });
+    
+    throw new Error(
+      "Gemini returned no text. Check the finish reason and prompt feedback in Render logs."
+    );
   } catch (error) {
     const apiError = error.status
       ? error
