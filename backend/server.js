@@ -11,6 +11,7 @@ const { GoogleGenAI } = require("@google/genai");
 const datasetRoutes = require("./routes/datasetRoutes");
 const splitRoutes = require("./routes/splitRoutes");
 const dktRoutes = require("./routes/dktRoutes");
+const masteryRoutes = require("./routes/masteryRoutes");
 
 dotenv.config();
 
@@ -659,6 +660,7 @@ app.use('/api/responses', responsesRouter);
 app.use("/api/dataset", datasetRoutes);
 app.use("/api/split", splitRoutes);
 app.use("/api/dkt", dktRoutes);
+app.use("/api/mastery", masteryRoutes);
 // ============================================
 // START SERVER
 // ============================================
