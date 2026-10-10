@@ -12,6 +12,7 @@ const datasetRoutes = require("./routes/datasetRoutes");
 const splitRoutes = require("./routes/splitRoutes");
 const dktRoutes = require("./routes/dktRoutes");
 const masteryRoutes = require("./routes/masteryRoutes");
+const uncertaintyRoutes = require("./routes/uncertaintyRoutes");
 
 dotenv.config();
 
@@ -661,6 +662,7 @@ app.use("/api/dataset", datasetRoutes);
 app.use("/api/split", splitRoutes);
 app.use("/api/dkt", dktRoutes);
 app.use("/api/mastery", masteryRoutes);
+app.use("/api/uncertainty", uncertaintyRoutes);
 // ============================================
 // START SERVER
 // ============================================
