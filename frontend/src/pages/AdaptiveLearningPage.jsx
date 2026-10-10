@@ -78,8 +78,38 @@ const sessionInsights = [
   { label: 'Streak health', value: 'Strong' },
 ];
 
+const quickQuiz = [
+  {
+    question: 'Which React hook is best for managing local component state?',
+    options: ['useReducer', 'useState', 'useEffect', 'useMemo'],
+    answer: 1,
+  },
+  {
+    question: 'What is the main benefit of async/await over nested callbacks?',
+    options: [
+      'It is faster in all cases',
+      'It makes async code easier to read and reason about',
+      'It replaces all promises',
+      'It prevents browser rendering',
+    ],
+    answer: 1,
+  },
+  {
+    question: 'What should you do when an API call fails?',
+    options: [
+      'Ignore it and continue',
+      'Display a user-friendly error state',
+      'Refresh the page automatically',
+      'Delete the request code',
+    ],
+    answer: 1,
+  },
+];
+
 const AdaptiveLearningPage = () => {
   const [selectedSkill, setSelectedSkill] = useState(skillMatrix[0].id);
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
 
   const currentSkill = useMemo(
     () => skillMatrix.find((skill) => skill.id === selectedSkill) ?? skillMatrix[0],
@@ -89,6 +119,19 @@ const AdaptiveLearningPage = () => {
   const averageMastery = Math.round(
     skillMatrix.reduce((sum, item) => sum + item.mastery, 0) / skillMatrix.length
   );
+
+  const handleAnswerSelect = (questionIndex, optionIndex) => {
+    if (submitted) return;
+    setAnswers((prev) => ({
+      ...prev,
+      [questionIndex]: optionIndex,
+    }));
+  };
+
+  const allAnswered = quickQuiz.every((_, index) => typeof answers[index] === 'number');
+  const correctCount = quickQuiz.reduce((total, question, index) => {
+    return total + (answers[index] === question.answer ? 1 : 0);
+  }, 0);
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
@@ -309,6 +352,71 @@ const AdaptiveLearningPage = () => {
                 Prioritise one “high-gap” skill per session. This keeps your learning curve smooth and reduces knowledge decay between practice blocks.
               </p>
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="rounded-2xl bg-fuchsia-100 p-3 text-fuchsia-600">
+              <Target size={22} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Adaptive quiz</p>
+              <h3 className="text-xl font-black text-gray-900">Quick confidence check</h3>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {quickQuiz.map((question, questionIndex) => (
+              <div key={question.question} className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+                <p className="text-base font-bold text-gray-900">{questionIndex + 1}. {question.question}</p>
+
+                <div className="mt-3 grid gap-2">
+                  {question.options.map((option, optionIndex) => {
+                    const isSelected = answers[questionIndex] === optionIndex;
+                    const isCorrect = question.answer === optionIndex;
+                    const showCorrect = submitted && isCorrect;
+                    const showWrong = submitted && isSelected && !isCorrect;
+
+                    const buttonClass = showCorrect
+                      ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                      : showWrong
+                        ? 'bg-red-100 border-red-300 text-red-700'
+                        : isSelected
+                          ? 'bg-indigo-100 border-indigo-300 text-indigo-700'
+                          : 'bg-white border-slate-200 text-slate-700';
+
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => handleAnswerSelect(questionIndex, optionIndex)}
+                        className={`w-full rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${buttonClass}`}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => setSubmitted(true)}
+              disabled={!allAnswered}
+              className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {submitted ? 'Submitted' : 'Check answers'}
+            </button>
+
+            {submitted && (
+              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200">
+                Score: {correctCount}/{quickQuiz.length}
+              </div>
+            )}
           </div>
         </section>
       </div>
