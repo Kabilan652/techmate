@@ -1,150 +1,128 @@
-/**
- * Student Response Model
- * Tracks student answers to practice exercises for DKT analysis
- */
+const { createClient } = require("@supabase/supabase-js");
 
-const supabase = require('../config/supabase');
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-class StudentResponse {
-  /**
-   * Record a student's response to a practice question
-   * @param {string} userId - Supabase user ID
-   * @param {string} skillId - The skill/concept being tested
-   * @param {string} exerciseId - The specific exercise/question ID
-   * @param {number} selectedOption - The option index student selected (0-3)
-   * @param {number} correctOption - The correct answer index
-   * @param {number} responseTimeMs - Time taken to answer in milliseconds
-   * @returns {Promise<Object>} Saved response record
-   */
-  static async createResponse({
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn(
+    "Supabase config missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env"
+  );
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: { persistSession: false },
+});
+
+class StudentResponseModel {
+  static async saveResponse({
     userId,
     skillId,
     exerciseId,
     selectedOption,
     correctOption,
-    responseTimeMs,
+    responseTimeMs = 0,
   }) {
-    try {
-      const isCorrect = selectedOption === correctOption;
-      const timestamp = new Date().toISOString();
+    if (!userId || !skillId || exerciseId === undefined) {
+      throw new Error("userId, skillId, and exerciseId are required.");
+    }
 
-      const { data, error } = await supabase
-        .from('student_responses')
-        .insert([
-          {
-            user_id: userId,
-            skill_id: skillId,
-            exercise_id: exerciseId,
-            selected_option: selectedOption,
-            correct_option: correctOption,
-            is_correct: isCorrect,
-            response_time_ms: responseTimeMs,
-            created_at: timestamp,
-          },
-        ])
-        .select()
-        .single();
+    if (selectedOption === undefined || correctOption === undefined) {
+      throw new Error("selectedOption and correctOption are required.");
+    }
 
-      if (error) throw error;
-      return { success: true, data };
-    } catch (error) {
-      console.error('Error creating student response:', error);
+    const isCorrect = Number(selectedOption) === Number(correctOption);
+    const createdAt = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from("student_responses")
+      .insert([
+        {
+          user_id: userId,
+          skill_id: skillId,
+          exercise_id: exerciseId,
+          selected_option: Number(selectedOption),
+          correct_option: Number(correctOption),
+          is_correct: isCorrect,
+          response_time_ms: Number(responseTimeMs || 0),
+          created_at: createdAt,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
       throw error;
     }
+
+    return data;
   }
 
-  /**
-   * Get all responses for a student
-   * @param {string} userId
-   * @returns {Promise<Array>} List of all responses
-   */
-  static async getResponsesByUser(userId) {
-    try {
-      const { data, error } = await supabase
-        .from('student_responses')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true });
+  static async getByUser(userId) {
+    const { data, error } = await supabase
+      .from("student_responses")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
 
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching responses:', error);
+    if (error) {
       throw error;
     }
+
+    return data || [];
   }
 
-  /**
-   * Get responses for a specific skill
-   * @param {string} userId
-   * @param {string} skillId
-   * @returns {Promise<Array>}
-   */
-  static async getResponsesBySkill(userId, skillId) {
-    try {
-      const { data, error } = await supabase
-        .from('student_responses')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('skill_id', skillId)
-        .order('created_at', { ascending: true });
+  static async getBySkill(userId, skillId) {
+    const { data, error } = await supabase
+      .from("student_responses")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("skill_id", skillId)
+      .order("created_at", { ascending: true });
 
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error fetching skill responses:', error);
+    if (error) {
       throw error;
     }
+
+    return data || [];
   }
 
-  /**
-   * Get accuracy stats for a skill
-   * @param {string} userId
-   * @param {string} skillId
-   * @returns {Promise<Object>} { totalAttempts, correctCount, accuracy }
-   */
-  static async getSkillAccuracy(userId, skillId) {
-    try {
-      const responses = await this.getResponsesBySkill(userId, skillId);
-      
-      if (responses.length === 0) {
-        return {
-          totalAttempts: 0,
-          correctCount: 0,
-          accuracy: 0,
-        };
-      }
+  static async getAccuracyBySkill(userId) {
+    const responses = await this.getByUser(userId);
 
-      const correctCount = responses.filter((r) => r.is_correct).length;
-      return {
-        totalAttempts: responses.length,
-        correctCount,
-        accuracy: (correctCount / responses.length) * 100,
+    const grouped = {};
+    for (const response of responses) {
+      const key = response.skill_id;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(response);
+    }
+
+    const result = {};
+    for (const [skillId, list] of Object.entries(grouped)) {
+      const total = list.length;
+      const correct = list.filter((r) => r.is_correct).length;
+      result[skillId] = {
+        totalAttempts: total,
+        correctCount: correct,
+        accuracy: total ? (correct / total) * 100 : 0,
       };
-    } catch (error) {
-      console.error('Error calculating accuracy:', error);
-      throw error;
     }
+
+    return result;
   }
 
-  /**
-   * Delete all responses (for testing)
-   * @param {string} userId
-   */
-  static async deleteUserResponses(userId) {
-    try {
-      const { error } = await supabase
-        .from('student_responses')
-        .delete()
-        .eq('user_id', userId);
+  static async deleteAllForUser(userId) {
+    const { error } = await supabase
+      .from("student_responses")
+      .delete()
+      .eq("user_id", userId);
 
-      if (error) throw error;
-      return { success: true };
-    } catch (error) {
-      console.error('Error deleting responses:', error);
+    if (error) {
       throw error;
     }
+
+    return { success: true };
   }
 }
 
-module.exports = StudentResponse;
+module.exports = StudentResponseModel;
