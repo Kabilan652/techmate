@@ -24,7 +24,7 @@ const ai = process.env.GEMINI_API_KEY
     })
   : null;
 
-const GEMINI_MODEL = "gemini-3.5-flash";
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_TIMEOUT = 45000;
 
 // ============================================
