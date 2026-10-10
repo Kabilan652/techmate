@@ -1,7 +1,7 @@
 // ============================================
 // TECHMATE AI - BACKEND SERVER
 // ============================================
-
+const responsesRouter = require("./routes/responses");
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
