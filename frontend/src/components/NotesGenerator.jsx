@@ -6,25 +6,47 @@ const NotesGenerator = () => {
     const [generatedNote, setGeneratedNote] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleGenerate = async () => {
-        if (!topic || !text) return;
-
+      const handleGenerate = async () => {
+        if (!topic.trim() || !text.trim()) {
+            alert("Please enter a topic and content.");
+            return;
+        }
+    
         setIsLoading(true);
+        setGeneratedNote(null);
+    
         try {
-            const response = await fetch('https://backendtech-cg4g.onrender.com/api/notes/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ topic, text }),
-            });
+            const response = await fetch(
+                "https://backendtech-cg4g.onrender.com/api/ai/notes",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        text: `Topic: ${topic}\n\nContent:\n${text}`,
+                    }),
+                }
+            );
+    
             const data = await response.json();
-            setGeneratedNote(data);
+    
+            if (!response.ok) {
+                throw new Error(data.error || data.message || "Failed to generate notes");
+            }
+    
+            setGeneratedNote({
+                topic,
+                content: data.notes || data.content || data.reply || "No notes returned.",
+                keyPoints: data.keyPoints || [],
+            });
         } catch (error) {
             console.error("Error generating notes:", error);
+            alert(error.message || "Failed to connect to the AI. Please try again.");
         } finally {
             setIsLoading(false);
         }
+    };
     };
 
     return (
