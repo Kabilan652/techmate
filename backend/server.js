@@ -24,7 +24,7 @@ const ai = process.env.GEMINI_API_KEY
     })
   : null;
 
-const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_MODEL = "gemini-3.5-flash";
 const GEMINI_TIMEOUT = 45000;
 
 // ============================================
@@ -582,10 +582,10 @@ app.post("/api/ai/chat", async (req, res) => {
       ...recentMessages,
     ];
 
-    const reply = await callGemini(
-      optimizedConversation,
-      512
-    );
+   const reply = await callGemini(
+    optimizedConversation,
+    256
+  );
 
     return res.json({ reply });
   } catch (error) {
