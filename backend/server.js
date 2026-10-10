@@ -1,3 +1,7 @@
+// ============================================
+// TECHMATE AI - BACKEND SERVER
+// ============================================
+
 // IMPORTS
 const express = require("express");
 const cors = require("cors");
@@ -11,16 +15,26 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ============================================
 // GEMINI CONFIGURATION
+// ============================================
+
 const ai = process.env.GEMINI_API_KEY
   ? new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
     })
   : null;
 
+// Keep this model only if it is available to your API key.
 const GEMINI_MODEL = "gemini-3.8-flash";
 
+// Maximum time to wait for Gemini.
+const GEMINI_TIMEOUT = 20000;
+
+// ============================================
 // MIDDLEWARE
+// ============================================
+
 app.use(
   cors({
     origin: [
@@ -36,21 +50,31 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
 
+// ============================================
 // GEMINI HELPER
-async function callGemini(messages, maxTokens = 512) {
+// ============================================
+
+async function callGemini(messages, maxTokens = 256) {
   if (!ai) {
-    throw new Error("GEMINI_API_KEY is missing from environment variables");
+    const error = new Error(
+      "GEMINI_API_KEY is missing from environment variables"
+    );
+
+    error.status = 500;
+    throw error;
   }
 
   if (!Array.isArray(messages) || messages.length === 0) {
     throw new Error("A non-empty messages array is required");
   }
 
+  // Extract system instructions.
   const systemInstruction = messages
     .filter((msg) => msg.role === "system")
-    .map((msg) => msg.content)
+    .map((msg) => String(msg.content ?? ""))
     .join("\n");
 
+  // Convert messages into Gemini format.
   const contents = messages
     .filter((msg) => msg.role !== "system")
     .map((msg) => {
@@ -60,7 +84,11 @@ async function callGemini(messages, maxTokens = 512) {
 
       return {
         role: msg.role === "assistant" ? "model" : msg.role,
-        parts: [{ text: String(msg.content ?? "") }],
+        parts: [
+          {
+            text: String(msg.content ?? ""),
+          },
+        ],
       };
     });
 
@@ -70,52 +98,116 @@ async function callGemini(messages, maxTokens = 512) {
 
   const startTime = Date.now();
 
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents,
-    config: {
-      maxOutputTokens: maxTokens,
-      ...(systemInstruction ? { systemInstruction } : {}),
-    },
-  });
+  let timeoutId;
 
-  console.log(`Gemini response time: ${Date.now() - startTime}ms`);
+  try {
+    console.log(`Gemini request started: ${GEMINI_MODEL}`);
 
-  const reply = response.text;
+    // Race the API request against a timeout.
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const error = new Error(
+          `Gemini request timed out after ${GEMINI_TIMEOUT / 1000} seconds`
+        );
 
-  if (!reply || !reply.trim()) {
-    throw new Error("Gemini returned an empty response");
+        error.status = 504;
+        reject(error);
+      }, GEMINI_TIMEOUT);
+    });
+
+    const responsePromise = ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents,
+      config: {
+        maxOutputTokens: maxTokens,
+        ...(systemInstruction
+          ? { systemInstruction }
+          : {}),
+      },
+    });
+
+    const response = await Promise.race([
+      responsePromise,
+      timeoutPromise,
+    ]);
+
+    console.log(
+      `Gemini response received in ${Date.now() - startTime}ms`
+    );
+
+    const reply = response.text;
+
+    if (!reply || !reply.trim()) {
+      throw new Error("Gemini returned an empty response");
+    }
+
+    return reply.trim();
+  } catch (error) {
+    console.error(
+      `Gemini failed after ${Date.now() - startTime}ms:`,
+      error.message
+    );
+
+    throw error;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
-
-  return reply.trim();
 }
 
+// ============================================
 // GEMINI ERROR HANDLER
-function handleGeminiError(label, error, res, message) {
+// ============================================
+
+function handleGeminiError(label, error, res, defaultMessage) {
   console.error(`${label}:`, error.message);
 
-  if (error.status === 429) {
+  const status = Number(error.status || error.statusCode);
+
+  if (status === 429) {
     return res.status(429).json({
       message: "AI usage limit reached. Please try again later.",
     });
   }
 
-  if (error.status === 400 || error.status === 404) {
-    return res.status(502).json({
-      message: "The AI request or model configuration is invalid.",
+  if (status === 503) {
+    return res.status(503).json({
+      message:
+        "Gemini is temporarily busy. Please try again shortly.",
     });
   }
 
-  if (error.status === 403 || error.status === 401) {
-    return res.status(502).json({
-      message: "Gemini API authentication or permission failed.",
+  if (status === 504) {
+    return res.status(504).json({
+      message:
+        "The AI response took too long. Please try again.",
     });
   }
 
-  return res.status(500).json({ message });
+  if (status === 400 || status === 404) {
+    return res.status(502).json({
+      message:
+        "The AI request or model configuration is invalid.",
+    });
+  }
+
+  if (status === 401 || status === 403) {
+    return res.status(502).json({
+      message:
+        "Gemini authentication or permission failed.",
+    });
+  }
+
+  return res.status(500).json({
+    message: defaultMessage,
+  });
 }
 
+// ============================================
 // MOCK USER DATA
+// ============================================
+
 const USER_DATA = {
   id: 1,
   name: "Alex Johnson",
@@ -130,6 +222,7 @@ const DASHBOARD_STATS = {
   quizzesTaken: 15,
   averageScore: 88,
   streak: 12,
+
   recentActivity: [
     {
       type: "quiz",
@@ -150,6 +243,7 @@ const DASHBOARD_STATS = {
       score: null,
     },
   ],
+
   progressData: [
     { day: "Mon", hours: 2.5 },
     { day: "Tue", hours: 4.0 },
@@ -157,6 +251,7 @@ const DASHBOARD_STATS = {
     { day: "Thu", hours: 5.5 },
     { day: "Fri", hours: 1.8 },
   ],
+
   courses: [
     {
       name: "Advanced React Patterns",
@@ -173,27 +268,36 @@ const DASHBOARD_STATS = {
   ],
 };
 
-// HELPER
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
+// ============================================
 // HEALTH CHECK
+// ============================================
+
 app.get("/", (req, res) => {
-  res.send("TechMate API is running!");
+  res.status(200).send("TechMate API is running!");
 });
 
+// ============================================
 // DASHBOARD
+// ============================================
+
 app.get("/api/dashboard/stats", (req, res) => {
-  res.json({
+  return res.json({
     user: USER_DATA,
     ...DASHBOARD_STATS,
   });
 });
 
+// ============================================
 // LOGIN
+// ============================================
+
 app.post("/api/auth/login", (req, res) => {
   const { email, password } = req.body;
 
-  if (email === "student@demo.com" && password === "password") {
+  if (
+    email === "student@demo.com" &&
+    password === "password"
+  ) {
     return res.json({
       success: true,
       token: "fake-jwt-token",
@@ -207,7 +311,10 @@ app.post("/api/auth/login", (req, res) => {
   });
 });
 
+// ============================================
 // AI ROADMAP
+// ============================================
+
 app.post("/api/ai/roadmap", async (req, res) => {
   try {
     const { topic } = req.body;
@@ -219,9 +326,10 @@ app.post("/api/ai/roadmap", async (req, res) => {
     }
 
     const prompt = `
-Generate a concise 5-step learning roadmap for "${topic}".
+Create a concise 5-step learning roadmap for "${topic}".
 
-Return ONLY a valid JSON array:
+Return ONLY a valid JSON array in this format:
+
 [
   {
     "id": 1,
@@ -229,7 +337,12 @@ Return ONLY a valid JSON array:
     "description": "Short description",
     "xp": 500,
     "duration": "2h 00m",
-    "topics": ["Concept 1", "Concept 2", "Concept 3", "Concept 4"]
+    "topics": [
+      "Concept 1",
+      "Concept 2",
+      "Concept 3",
+      "Concept 4"
+    ]
   }
 ]
 
@@ -253,7 +366,9 @@ Do not include Markdown code fences.
       throw new Error("AI did not return a valid JSON array");
     }
 
-    const roadmap = JSON.parse(cleanText.substring(start, end + 1));
+    const roadmap = JSON.parse(
+      cleanText.substring(start, end + 1)
+    );
 
     if (!Array.isArray(roadmap)) {
       throw new Error("Roadmap response must be an array");
@@ -270,7 +385,10 @@ Do not include Markdown code fences.
   }
 });
 
+// ============================================
 // CODE EXECUTION
+// ============================================
+
 app.post("/api/code/execute", async (req, res) => {
   try {
     const { language, code } = req.body;
@@ -300,11 +418,15 @@ app.post("/api/code/execute", async (req, res) => {
         source_code: code,
         language_id: languageMap[language],
       },
-      { timeout: 30000 }
+      {
+        timeout: 30000,
+      }
     );
 
     const data = response.data;
-    const isError = data.status && data.status.id !== 3;
+
+    const isError =
+      data.status && data.status.id !== 3;
 
     const output = isError
       ? data.stderr ||
@@ -320,7 +442,10 @@ app.post("/api/code/execute", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("CODE EXECUTION ERROR:", error.message);
+    console.error(
+      "CODE EXECUTION ERROR:",
+      error.message
+    );
 
     return res.status(500).json({
       run: {
@@ -331,7 +456,10 @@ app.post("/api/code/execute", async (req, res) => {
   }
 });
 
+// ============================================
 // AI QUIZ
+// ============================================
+
 app.post("/api/ai/quiz", async (req, res) => {
   try {
     const { topic } = req.body;
@@ -345,12 +473,18 @@ app.post("/api/ai/quiz", async (req, res) => {
     const prompt = `
 Generate 10 multiple-choice quiz questions about "${topic}".
 
-Return ONLY a valid JSON array:
+Return ONLY a valid JSON array in this format:
+
 [
   {
     "id": 1,
     "question": "Question text",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "options": [
+      "Option A",
+      "Option B",
+      "Option C",
+      "Option D"
+    ],
     "answer": 0,
     "explanation": "Short explanation"
   }
@@ -377,7 +511,9 @@ Do not include Markdown code fences.
       throw new Error("AI did not return a valid JSON array");
     }
 
-    const quiz = JSON.parse(cleanText.substring(start, end + 1));
+    const quiz = JSON.parse(
+      cleanText.substring(start, end + 1)
+    );
 
     if (!Array.isArray(quiz)) {
       throw new Error("Quiz response must be an array");
@@ -394,15 +530,21 @@ Do not include Markdown code fences.
   }
 });
 
+// ============================================
 // COURSE PROGRESS
+// ============================================
+
 app.get("/api/courses/progress", (req, res) => {
-  res.json({
+  return res.json({
     success: true,
     courses: DASHBOARD_STATS.courses,
   });
 });
 
+// ============================================
 // AI CHAT
+// ============================================
+
 app.post("/api/ai/chat", async (req, res) => {
   try {
     const { messages, message } = req.body;
@@ -414,16 +556,23 @@ app.post("/api/ai/chat", async (req, res) => {
         {
           role: "system",
           content:
-            "You are TechMate, a fast and helpful programming assistant. Answer directly in 3-5 sentences. Use short examples when useful.",
+            "You are TechMate, a fast and helpful programming assistant. " +
+            "Answer directly in 3-5 sentences. " +
+            "Use short examples when useful.",
         },
         ...messages,
       ];
-    } else if (typeof message === "string" && message.trim()) {
+    } else if (
+      typeof message === "string" &&
+      message.trim()
+    ) {
       conversation = [
         {
           role: "system",
           content:
-            "You are TechMate, a fast and helpful programming assistant. Answer directly in 3-5 sentences. Use short examples when useful.",
+            "You are TechMate, a fast and helpful programming assistant. " +
+            "Answer directly in 3-5 sentences. " +
+            "Use short examples when useful.",
         },
         {
           role: "user",
@@ -432,11 +581,12 @@ app.post("/api/ai/chat", async (req, res) => {
       ];
     } else {
       return res.status(400).json({
-        message: "A message or non-empty messages array is required",
+        message:
+          "A message or non-empty messages array is required",
       });
     }
 
-    // Keep only the latest 6 conversation messages.
+    // Keep the system instruction and latest 6 messages.
     const systemMessage = conversation.find(
       (item) => item.role === "system"
     );
@@ -450,8 +600,11 @@ app.post("/api/ai/chat", async (req, res) => {
       ...recentMessages,
     ];
 
-    // Shorter output usually reduces generation time.
-    const reply = await callGemini(optimizedConversation, 512);
+    // Short responses can reduce generation time.
+    const reply = await callGemini(
+      optimizedConversation,
+      256
+    );
 
     return res.json({ reply });
   } catch (error) {
@@ -464,7 +617,10 @@ app.post("/api/ai/chat", async (req, res) => {
   }
 });
 
+// ============================================
 // AI SMART NOTES
+// ============================================
+
 app.post("/api/ai/notes", async (req, res) => {
   try {
     const { text, topic } = req.body;
@@ -479,7 +635,8 @@ app.post("/api/ai/notes", async (req, res) => {
       {
         role: "system",
         content:
-          "You are an expert tutor. Create concise study notes with headings, key points, definitions, and short examples.",
+          "You are an expert tutor. Create concise study notes " +
+          "with headings, key points, definitions, and short examples.",
       },
       {
         role: "user",
@@ -502,7 +659,10 @@ app.post("/api/ai/notes", async (req, res) => {
   }
 });
 
+// ============================================
 // START SERVER
+// ============================================
+
 app.listen(PORT, () => {
   console.log(`TechMate backend running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/`);
