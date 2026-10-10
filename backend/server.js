@@ -18,7 +18,7 @@ const ai = process.env.GEMINI_API_KEY
     })
   : null;
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3.8-flash";
 
 // MIDDLEWARE
 app.use(
