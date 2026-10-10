@@ -1,38 +1,68 @@
-const Note = require('../models/Note');
+const { GoogleGenAI } = require("@google/genai");
+const Note = require("../models/Note");
+
+const ai = new GoogleGenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+});
 
 const noteController = {
     generateNotes: async (req, res) => {
-        const { topic, text } = req.body;
+        try {
+            const { topic, text } = req.body;
 
-        // Mock AI Note Generation
-        // In reality, this would call an AI service to summarize the text
+            if (!topic || !text) {
+                return res.status(400).json({
+                    error: "Topic and text are required.",
+                });
+            }
 
-        const summary = `Generated notes for: ${topic}\n\nSummary of text: ${text.substring(0, 50)}...`;
-        const keyPoints = ["Key Point 1", "Key Point 2", "Important Term"];
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: `
+                    Create clear, well-organized study notes.
 
-        const newNote = {
-            topic,
-            content: summary,
-            keyPoints
-        };
+                    Topic: ${topic}
 
-        // If we had a database connection, we would save it here
-        // const savedNote = await Note.create(newNote);
+                    Source text:
+                    ${text}
 
-        // Simulate delay
-        setTimeout(() => {
+                    Return:
+                    1. A concise summary.
+                    2. Important key points.
+                    3. Important terms and definitions.
+
+                    Format the response using readable headings and bullet points.
+                `,
+            });
+
+            const newNote = {
+                topic,
+                content: response.text || "No summary generated.",
+                keyPoints: [],
+            };
+
             res.json(newNote);
-        }, 1000);
+        } catch (error) {
+            console.error("GEMINI NOTES ERROR:", error.message);
+
+            res.status(500).json({
+                error: "Failed to generate notes.",
+            });
+        }
     },
 
     getAllNotes: async (req, res) => {
-        // Mock fetching notes
-        const notes = [
-            { _id: '1', topic: 'React Hooks', content: 'Summary of React Hooks...', keyPoints: ['useState', 'useEffect'] },
-            { _id: '2', topic: 'Node.js', content: 'Intro to Node.js...', keyPoints: ['Event Loop', 'Modules'] }
-        ];
-        res.json(notes);
-    }
+        try {
+            const notes = await Note.find().sort({ _id: -1 });
+            res.json(notes);
+        } catch (error) {
+            console.error("GET NOTES ERROR:", error.message);
+
+            res.status(500).json({
+                error: "Failed to fetch notes.",
+            });
+        }
+    },
 };
 
 module.exports = noteController;
