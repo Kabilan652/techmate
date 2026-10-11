@@ -1,6 +1,13 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
+
 import Layout from './components/Layout';
+
 import ChatPage from './pages/ChatPage';
 import NotesPage from './pages/NotesPage';
 import QuizPage from './pages/QuizPage';
@@ -12,15 +19,27 @@ import SignupPage from './pages/SignupPage';
 import LandingPage from './pages/LandingPage';
 import CourseProgress from './pages/CourseProgress';
 import AdaptiveLearningPage from './pages/AdaptiveLearningPage';
-import { useAuth } from './context/AuthContext';
 import LiveClassroomPage from './pages/LiveClassroomPage';
-import AIJobMatchingPage from "./pages/AIJobMatchingPage";
+import AIJobMatchingPage from './pages/AIJobMatchingPage';
 
-// Simple protection wrapper
+import { useAuth } from './context/AuthContext';
+
+// Protected route wrapper
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
-  if (loading) return null; // wait for session
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-4 text-sm text-gray-600">
+            Loading TechMate AI...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -33,45 +52,78 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Routes */}
+        {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
+
         <Route path="/login" element={<LoginPage />} />
+
         <Route path="/signup" element={<SignupPage />} />
 
-        {/* Protected Routes wrapped in Layout */}
-        <Route element={<Layout />}>
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-          <Route path="/notes" element={<ProtectedRoute><NotesPage /></ProtectedRoute>} />
-          <Route path="/quiz" element={<ProtectedRoute><QuizPage /></ProtectedRoute>} />
-          <Route path="/code" element={<ProtectedRoute><CodePage /></ProtectedRoute>} />
-          <Route path="/roadmap" element={<ProtectedRoute><RoadmapPage /></ProtectedRoute>} />
-          <Route path="/adaptive" element={<ProtectedRoute><AdaptiveLearningPage /></ProtectedRoute>} />
-        </Route>
+        {/* Protected application routes with shared layout */}
         <Route
-          path="/live-classroom"
           element={
             <ProtectedRoute>
-              <LiveClassroomPage />
+              <Layout />
             </ProtectedRoute>
           }
-        />
-        <Route
-          path="/job-matching"
-          element={
-            <Layout>
-              <AIJobMatchingPage />
-            </Layout>
-          }
-        />
+        >
+          <Route
+            path="/dashboard"
+            element={<DashboardPage />}
+          />
 
+          <Route
+            path="/chat"
+            element={<ChatPage />}
+          />
+
+          <Route
+            path="/notes"
+            element={<NotesPage />}
+          />
+
+          <Route
+            path="/quiz"
+            element={<QuizPage />}
+          />
+
+          <Route
+            path="/code"
+            element={<CodePage />}
+          />
+
+          <Route
+            path="/roadmap"
+            element={<RoadmapPage />}
+          />
+
+          <Route
+            path="/adaptive"
+            element={<AdaptiveLearningPage />}
+          />
+
+          <Route
+            path="/course"
+            element={<CourseProgress />}
+          />
+
+          {/* Live Classroom */}
+          <Route
+            path="/live-classroom"
+            element={<LiveClassroomPage />}
+          />
+
+          {/* AI Job Matching */}
+          <Route
+            path="/job-matching"
+            element={<AIJobMatchingPage />}
+          />
+        </Route>
+
+        {/* Fallback route */}
         <Route
-          path="/course"
-          element={
-            <ProtectedRoute>
-              <CourseProgress />
-            </ProtectedRoute>
-          }
+          path="*"
+          element={<Navigate to="/" replace />}
         />
       </Routes>
     </Router>
