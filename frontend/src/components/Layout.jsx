@@ -34,6 +34,12 @@ const Layout = () => {
         { path: '/roadmap', label: 'Roadmap', icon: Map, color: 'text-teal-500' },
         { path: '/adaptive', label: 'Adaptive', icon: BrainCircuit, color: 'text-pink-500' },
         { path: '/course', label: 'Course', icon: BookOpen, color: 'text-rose-500' },
+        {
+          path: '/live-classroom',
+          label: 'Live Classroom',
+          icon: Radio,
+          color: 'text-cyan-500'
+        },
     ];
 
     return (
