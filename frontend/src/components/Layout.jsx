@@ -28,6 +28,7 @@ const Layout = () => {
         navigate('/login');
     };
 
+    // Sidebar navigation items
     const navItems = [
         {
             path: '/dashboard',
@@ -111,7 +112,7 @@ const Layout = () => {
                 }`}
             >
                 {/* Logo */}
-                <div className="flex items-center justify-between p-6">
+                <div className="flex shrink-0 items-center justify-between p-6">
                     <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-2xl font-black text-transparent">
                         <Sparkles className="text-blue-600" size={24} />
                         TechMate AI
@@ -128,17 +129,16 @@ const Layout = () => {
                 </div>
 
                 {/* Navigation */}
-                <nav className="custom-scrollbar flex-1 overflow-y-auto px-4 py-4">
+                <nav className="custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto px-4 py-4">
                     <ul className="space-y-2">
                         {navItems.map((item) => (
-                            <li key={item.path} key={item.path}>
+                            <li key={item.path}>
                                 <NavLink
                                     to={item.path}
-                                    onClick={() =>
-                                        setIsMobileMenuOpen(false)
-                                    }
+                                    onClick={() => setIsMobileMenuOpen(false)}
                                     className={({ isActive }) => `
-                                        group flex items-center gap-3 rounded-xl p-3 font-bold transition-all duration-200
+                                        flex w-full items-center gap-3 rounded-xl p-3
+                                        font-bold transition-all duration-200
                                         ${
                                             isActive
                                                 ? 'bg-indigo-50 text-indigo-700 shadow-sm'
@@ -150,17 +150,17 @@ const Layout = () => {
                                         <>
                                             <item.icon
                                                 size={20}
-                                                className={`transition-transform duration-200 ${
+                                                className={`shrink-0 transition-transform duration-200 ${
                                                     isActive
                                                         ? item.color
                                                         : 'text-gray-400 group-hover:scale-110'
                                                 }`}
-                                                strokeWidth={
-                                                    isActive ? 2.5 : 2
-                                                }
+                                                strokeWidth={isActive ? 2.5 : 2}
                                             />
 
-                                            <span>{item.label}</span>
+                                            <span className="whitespace-nowrap">
+                                                {item.label}
+                                            </span>
                                         </>
                                     )}
                                 </NavLink>
@@ -170,7 +170,7 @@ const Layout = () => {
                 </nav>
 
                 {/* Logout */}
-                <div className="border-t border-gray-100 p-4">
+                <div className="shrink-0 border-t border-gray-100 p-4">
                     <button
                         type="button"
                         onClick={handleLogout}
@@ -186,7 +186,7 @@ const Layout = () => {
             <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
 
                 {/* Mobile header */}
-                <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/80 p-4 shadow-sm backdrop-blur-md md:hidden">
+                <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-gray-100 bg-white/80 p-4 shadow-sm backdrop-blur-md md:hidden">
                     <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-xl font-black text-transparent">
                         <Sparkles className="text-blue-600" size={20} />
                         TechMate AI
@@ -202,11 +202,10 @@ const Layout = () => {
                     </button>
                 </header>
 
-                {/* Nested page content */}
-                <div className="min-h-0 flex-1 overflow-y-auto">
+                {/* Page content */}
+                <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
                     <Outlet />
                 </div>
-
             </main>
         </div>
     );
