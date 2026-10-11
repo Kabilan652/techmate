@@ -13,6 +13,7 @@ import LandingPage from './pages/LandingPage';
 import CourseProgress from './pages/CourseProgress';
 import AdaptiveLearningPage from './pages/AdaptiveLearningPage';
 import { useAuth } from './context/AuthContext';
+import LiveClassroomPage from './pages/LiveClassroomPage';
 
 // Simple protection wrapper
 const ProtectedRoute = ({ children }) => {
@@ -46,6 +47,14 @@ function App() {
           <Route path="/roadmap" element={<ProtectedRoute><RoadmapPage /></ProtectedRoute>} />
           <Route path="/adaptive" element={<ProtectedRoute><AdaptiveLearningPage /></ProtectedRoute>} />
         </Route>
+        <Route
+          path="/live-classroom"
+          element={
+            <ProtectedRoute>
+              <LiveClassroomPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/course"
