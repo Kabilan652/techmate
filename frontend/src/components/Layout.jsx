@@ -12,7 +12,8 @@ import {
     Menu,
     X,
     Sparkles,
-    BrainCircuit
+    BrainCircuit,
+    Radio
 } from 'lucide-react';
 
 const Layout = () => {
