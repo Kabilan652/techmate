@@ -14,6 +14,7 @@ import CourseProgress from './pages/CourseProgress';
 import AdaptiveLearningPage from './pages/AdaptiveLearningPage';
 import { useAuth } from './context/AuthContext';
 import LiveClassroomPage from './pages/LiveClassroomPage';
+import AIJobMatchingPage from "./pages/AIJobMatchingPage";
 
 // Simple protection wrapper
 const ProtectedRoute = ({ children }) => {
