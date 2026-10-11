@@ -13,7 +13,8 @@ import {
     X,
     Sparkles,
     BrainCircuit,
-    Radio
+    Radio,
+    BriefcaseBusiness,
 } from 'lucide-react';
 
 const Layout = () => {
@@ -40,6 +41,11 @@ const Layout = () => {
           label: 'Live Classroom',
           icon: Radio,
           color: 'text-cyan-500'
+        },
+        {
+          name: "AI Job Matching",
+          path: "/job-matching",
+          icon: BriefcaseBusiness,
         },
     ];
 
