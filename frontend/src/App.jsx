@@ -56,6 +56,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/job-matching"
+          element={
+            <Layout>
+              <AIJobMatchingPage />
+            </Layout>
+          }
+        />
 
         <Route
           path="/course"
